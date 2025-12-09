@@ -7,6 +7,8 @@ A generalization of pg module.
 -export([
     start/2,
     start_link/2,
+    start_standalone/2,
+    start_link_standalone/2,
     update/2,
     subscribe/2,
     unsubscribe/2
@@ -33,6 +35,7 @@ A generalization of pg module.
 -record(state, {
     scope :: atom(),
     module :: module(),
+    standalone :: boolean(),
     version :: version(),
     storage :: storage(),
     data :: data(),
@@ -88,11 +91,19 @@ A generalization of pg module.
 
 -spec start(scope(), module()) -> gen_server:start_ret().
 start(Scope, Module) ->
-    gen_server:start({local, Scope}, ?MODULE, {Scope, Module}, []).
+    gen_server:start({local, Scope}, ?MODULE, {Scope, Module, false}, []).
 
 -spec start_link(scope(), module()) -> gen_server:start_ret().
 start_link(Scope, Module) ->
-    gen_server:start_link({local, Scope}, ?MODULE, {Scope, Module}, []).
+    gen_server:start_link({local, Scope}, ?MODULE, {Scope, Module, false}, []).
+
+-spec start_standalone(scope(), module()) -> gen_server:start_ret().
+start_standalone(Scope, Module) ->
+    gen_server:start({local, Scope}, ?MODULE, {Scope, Module, true}, []).
+
+-spec start_link_standalone(scope(), module()) -> gen_server:start_ret().
+start_link_standalone(Scope, Module) ->
+    gen_server:start_link({local, Scope}, ?MODULE, {Scope, Module, true}, []).
 
 -spec update(scope(), update()) -> ok.
 update(Scope, Update) ->
@@ -106,18 +117,19 @@ subscribe(Scope, Subscription) ->
 unsubscribe(Scope, Ref) ->
     gen_server:call(Scope, {unsubscribe, Ref}, infinity).
 
--spec init({scope(), module()}) -> {ok, state()}.
-init({Scope, Module}) ->
-    ok = net_kernel:monitor_nodes(true),
+-spec init({scope(), module(), boolean()}) -> {ok, state()}.
+init({Scope, Module, Standalone}) ->
+    Standalone andalso (ok = net_kernel:monitor_nodes(true)),
     State = #state{
         scope = Scope,
         module = Module,
+        standalone = Standalone,
         version = Module:version(),
         storage = Module:init_storage(Scope),
         data = Module:init_data()
     },
     %% discover all nodes running this scope in the cluster
-    _ = [do_send({Scope, Node}, {discover, self(), State#state.version}) || Node <- nodes()],
+    _ = Standalone orelse [do_send({Scope, Node}, {discover, self(), State#state.version}) || Node <- nodes()],
     {ok, State}.
 
 -spec handle_call
@@ -169,6 +181,8 @@ handle_cast(Message, State) ->
         | {{'DOWN', subscribe}, reference(), process, pid(), dynamic()}
         | {{'DOWN', peer}, reference(), process, pid(), dynamic()}
         | dynamic().
+handle_info({discover, Peer, Version}, #state{standalone = true} = State) when is_pid(Peer) ->
+    {noreply, State};
 handle_info({discover, Peer, Version}, #state{module = Module} = State) ->
     gen_server:cast(Peer, translate_data(State#state.data, Version, State)),
     case is_map_key(Peer, State#state.peers) of
