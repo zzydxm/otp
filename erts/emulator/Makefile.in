@@ -1190,6 +1190,7 @@ RUN_OBJS += \
 	$(OBJDIR)/erl_port_task.o	$(OBJDIR)/erl_arith.o \
 	$(OBJDIR)/time.o		$(OBJDIR)/erl_time_sup.o  \
 	$(OBJDIR)/external.o		$(OBJDIR)/dist.o \
+	$(OBJDIR)/dist_filter.o		$(OBJDIR)/dist_filter_cursor.o \
 	$(OBJDIR)/binary.o		$(OBJDIR)/erl_db.o \
 	$(OBJDIR)/erl_db_util.o		$(OBJDIR)/erl_db_hash.o \
 	$(OBJDIR)/erl_db_tree.o		$(OBJDIR)/erl_thr_progress.o \

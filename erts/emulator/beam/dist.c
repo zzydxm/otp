@@ -42,6 +42,7 @@
 #include "erl_process.h"
 #include "error.h"
 #include "dist.h"
+#include "dist_filter.h"
 #include "bif.h"
 #include "external.h"
 #include "erl_binary.h"
@@ -1127,6 +1128,7 @@ static BIF_RETTYPE spawn_request_yield_3(BIF_ALIST_3);
 void init_dist(void)
 {
     init_nodes_monitors();
+    dist_filter_init();
 
 #ifdef ERTS_DIST_MSG_DBG_FILE
     {
@@ -2196,6 +2198,10 @@ int erts_net_message(Port *prt,
 	goto decode_error;
     }
 
+    if (!dist_filter_message(edep, &arg)) {
+        goto decode_error;
+    }
+
     /* Fill the unused part of the hfrag */
     if (ede_hfrag && ede_hfrag->mem + ede_hfrag->used_size > factory.hp) {
         Uint slot = factory.hp - ede_hfrag->mem;
@@ -3015,8 +3021,8 @@ int erts_net_message(Port *prt,
 
         args = CONS(&tmp_heap[0], mfa, NIL);
         pid = erl_create_process(NULL,
-                                 am_erts_internal,
-                                 am_dist_spawn_init,
+                                 dist_filter_spawn_module,
+                                 dist_filter_spawn_fun,
                                  args,
                                  &so);
         if (is_non_value(pid)) {
